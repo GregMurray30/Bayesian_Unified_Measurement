@@ -6,7 +6,6 @@ A Bayesian approach to unifying results from MTA and MMM models
 - Exectute the first code block that contains required packages. 
 - Click "yes" when prompted to install the necessary packages.
 - Execute the second and then third code blocks in that order. 
-- If you wish to collect the performances for multiple simulation runs in the file mflow_basic2.csv, then after the initial run you must change the line #500 to "ml_flow_basic2 = rbind(ml_flow_basic2, c(MAPE_hyb_bumm_agg, MAPE_hyb_nomta_agg))"
 
 The code will print out the final MAPE for both the BUMM and the regular MMM model at the end.
 
