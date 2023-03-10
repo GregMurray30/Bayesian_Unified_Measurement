@@ -2,10 +2,10 @@
 A Bayesian approach to unifying results from MTA and MMM models
 
 ## Run Instructions:
--After cloning the repo, open the file MMM_Sim_geom.rmd in RStudio. 
--Then, exectute the first code block that contains required packages. 
--Click "yes" when prompted as install the necessary packages.
--Execute the second and then third code blocks in that order. 
+- After cloning the repo, open the file MMM_Sim_geom.rmd in RStudio. 
+- Then, exectute the first code block that contains required packages. 
+- Click "yes" when prompted as install the necessary packages.
+- Execute the second and then third code blocks in that order. 
 The code stores a lot of information but will print out the final MAPE for both the BUMM and a regular MMM model at the end.
 
 This repo contains the code for a prototype for unifying an MTA model (or any model that estimates the revenue attributable to a digital media channel that is hypothesized to have cannabalized revenue from traditional media channels) and an MMM model.
