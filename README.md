@@ -6,7 +6,7 @@ A Bayesian approach to unifying results from MTA and MMM models
 - Exectute the first code block that contains required packages. 
 - Click "yes" when prompted to install the necessary packages.
 - Execute the second and then third code blocks in that order. 
-The code stores a lot of information but will print out the final MAPE for both the BUMM and a regular MMM model at the end.
+The code stores and writes a lot of meta data but will print out the final MAPE for both the BUMM and a regular MMM model at the end.
 
 ## SUMMARY
 This repo contains the code for demonstrating POC for a unified media measurement (UMM) model via a simulation. The UMM reconciles results from an MTA model (or any model that estimates the revenue attributable to a digital media channel that is hypothesized to have cannabalized revenue from traditional media channels) and an MMM model.
