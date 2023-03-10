@@ -17,8 +17,9 @@ library(dplyr)
 options(mc.cores=4)
 par(mar=c(2,2,2,2)) #set margins
 
-ml_flow = matrix(rep(0L, 1*90), ncol=90, nrow=0)
+#ml_flow = matrix(rep(0L, 1*90), ncol=90, nrow=0)
 
+ml_flow_basic = matrix(rep(0L, 2), ncol=2, nrow=0)
 
 ```
 
@@ -490,6 +491,23 @@ Y_hat_res3 = (Y_nomta_pred+Y_hat_res2)/2
 MAPE_hyb_nomta_t = mean(abs((Y_hat_res3-Y_mta_actual)/Y_mta_actual))
 MAPE_hyb_nomta_agg = (sum(Y_hat_res3)-sum(Y_mta_actual))/sum(Y_mta_actual)
 
+
+
+
+print(c('BUMM model Aggregate MAPE:', MAPE_hyb_bumm_agg))
+print(c('No MTA model Aggregate MAPE:', MAPE_hyb_nomta_agg))
+
+
+ml_flow_basic2 = rbind(ml_flow_basic, c(MAPE_hyb_bumm_agg, MAPE_hyb_nomta_agg))
+
+write.csv(ml_flow_basic2, 'mlflow_basic2.csv')
+
+
+```
+
+
+
+```{r}
 total_mn_bumm_rev = sum(Y_all_pred_bumm)
 
 
@@ -671,142 +689,8 @@ total_hyb_bumm_rev, total_hyb_nomta_rev, MAPE_hyb_bumm_t, MAPE_hyb_bumm_agg, MAP
 write.csv(ml_flow2, '/Users/gregmurray/Documents/DS/ml_flow_geom_5_3.csv')
 
 
-print(c('BUMM model Aggregate MAPE:', MAPE_hyb_bumm_agg))
-print(c('No MTA model Aggregate MAPE:', MAPE_hyb_nomta_agg))
+
 
 ```
-```{r}
 
-get_mxd_preds <- function(alpha_hat, beta_hat, k_hat, slope_hat, N, num_media, max_lag, X_tensor2_mmm_inp) {
-      
-      lag_weights = array()
-      Y_hat = array()
-      cum_effects_hill_hat = matrix(rep(0L, N*num_media), ncol=num_media, nrow=N)
-      for (nn in 1:N) {
-         for (media in 1 : num_media) {
-            for (lag in 1 : max_lag) {
-              lag_weights[lag] = alpha_hat[media]^(lag - 1);
-            }
-            cum_effect_t_hat = array(X_tensor2_mmm_inp[nn, media,])%*%lag_weights;
-
-            cum_effects_hill_hat[nn, media] = beta_hill(cum_effect_t_hat, k_hat[media], slope_hat[media]);
-          }
-        
-        Y_hat[nn] =  cum_effects_hill_hat[nn,]%*%beta_hat[1:num_media];
-      }
-      
-      return (Y_hat)
-}
-
-get_mxd_perf <- function(fit_ss,alpha_hat2_mxd, beta_hat2_mxd, k_hat2_mxd, slope_hat2_mxd, N, num_media, max_lag, X_tensor2_final_inp) {
-  
-    
-    Y_hat_mxd = get_mxd_preds(alpha_hat2_mxd, beta_hat2_mxd, k_hat2_mxd, slope_hat2_mxd, N, 3, max_lag, X_tensor2_final_inp)
-    
-    MAPE_mxd = mean(abs((Y_hat_mxd-Y_noise)/Y_noise))
-
-  return (MAPE_mxd)
-}
-
-
-MAPE_bumm_mxd = get_mxd_perf(fit_ss_bumm, N, 3, max_lag,X_tensor2_final_inp)
-MAPE_nomta_mxd = get_mxd_perf(fit_ss_nomta, N, 3, max_lag,X_tensor2_final_inp)
-
-
-fit_ss = fit_ss_bumm
-
-alpha_hat_mxd <-fit_ss_bumm$alpha
-    alpha_hat2_mxd = rep(0L, num_media)
-    for(i in 1:3) {
-      alpha_hat2_mxd[[i]] = mean(alpha_hat_mxd[1:nrow(alpha_hat_mxd),i])
-    }
-#alpha_hat2_mxd[1]=params_bumm[1]
-    
-beta_hat_mxd <-fit_ss_bumm$beta
-beta_hat2_mxd = rep(0L, num_media)
-for(i in 1:3) {
-  beta_hat2_mxd[[i]] = mean(beta_hat_mxd[1:nrow(beta_hat_mxd),i])
-}
-#beta_hat2_mxd[1]=params_bumm[2]
-
-k_hat_mxd <-fit_ss_bumm$k
-k_hat2_mxd = rep(0L, num_media)
-for(i in 1:3) {
-  k_hat2_mxd[[i]] = mean(k_hat_mxd[1:nrow(k_hat_mxd),i])
-}
-#k_hat2_mxd[1]=params_bumm[3]
-
-slope_hat_mxd <-fit_ss_nomta$slope
-slope_hat2_mxd = rep(0L, num_media)
-for(i in 1:3) {
-  slope_hat2_mxd[[i]] = mean(slope_hat_mxd[1:nrow(slope_hat_mxd),i])
-}
-#slope_hat2_mxd[1]=params_bumm[4]
-
-
-mxd_hybrid_perf = get_mxd_perf(fit_ss, alpha_hat2_mxd, beta_hat2_mxd, k_hat2_mxd, slope_hat2_mxd, N, num_media, max_lag, X_tensor2_final_inp) 
-
-alpha_hat2_mxd
-beta_hat2_mxd
-k_hat2_mxd
-slope_hat2_mxd
-```
-
-```{r}
-
-alpha_hat2_mxd
-beta_hat2_mxd
-k_hat2_mxd
-slope_hat2_mxd
-```
-
-```{r}
-
-ml_flow = fread('/Users/gregmurray/Documents/DS/ml_flow_adj.csv')
-
-ml_flow$MAPE_diff1 = ml_flow$MAPE_nomta_t-ml_flow$MAPE_bumm_t
-ml_flow$MAPE_diff2 = ml_flow$MAPE_priors_t-ml_flow$MAPE_bumm_t
-ml_flow$min_MAPE_alt = min(ml_flow$MAPE_nomta_t, ml_flow$MAPE_priors_t)
-
-ml_flow$alpha_prior_est_ratio = ml_flow$alpha_mtaprior/ml_flow$alpha_bumm
-ml_flow$beta_prior_est_ratio = ml_flow$beta_mtaprior/ml_flow$beta_bumm
-ml_flow$k_prior_est_ratio = ml_flow$slope_mtaprior/ml_flow$k_bumm
-ml_flow$slope_prior_est_ratio = ml_flow$slope_mtaprior/ml_flow$slope_bumm
-
-
-res_inf = glm(bumm_better~alpha_prior_est_ratio+beta_prior_est_ratio+k_prior_est_ratio+slope_prior_est_ratio+noise_var+log(beta_defl_fact)+log(alpha_defl_fact)+log(beta_sd_infl_fact), data=ml_flow, family='binomial')
-print(summary(res_inf))
-
-z = ml_flow %>% select(alpha_mtaprior,alpha_bumm, alpha_defl_fact, alpha_prior_est_ratio,MAPE_diff1, MAPE_bumm_t, MAPE_nomta_t)
-```
-
-```{r}
-
-'''
-    alpha_hat_mxd <-fit_ss$alpha
-    alpha_hat2_mxd = rep(0L, num_media)
-    for(i in 1:num_media) {
-      alpha_hat2_mxd[[i]] = mean(alpha_hat_mxd[1:nrow(alpha_hat_mxd),i])
-    }
-    
-    beta_hat_mxd <-fit_ss$beta
-    beta_hat2_mxd = rep(0L, num_media)
-    for(i in 1:num_media) {
-      beta_hat2_mxd[[i]] = mean(beta_hat_mxd[1:nrow(beta_hat_mxd),i])
-    }
-    
-    k_hat_mxd <-fit_ss$k
-    k_hat2_mxd = rep(0L, num_media)
-    for(i in 1:num_media) {
-      k_hat2_mxd[[i]] = mean(k_hat_mxd[1:nrow(k_hat_mxd),i])
-    }
-    
-    slope_hat_mxd <-fit_ss$slope
-    slope_hat2_mxd = rep(0L, num_media)
-    for(i in 1:num_media) {
-      slope_hat2_mxd[[i]] = mean(slope_hat_mxd[1:nrow(slope_hat_mxd),i])
-    }
-
-    '''
-```
 
