@@ -1,0 +1,812 @@
+---
+title: "greg_mmm_mcmc"
+author: "Greg"
+date: "1/1/2021"
+output: html_document
+---
+
+```{r}
+library(rstan)
+library(shinystan)
+library(lmtest)
+library(data.table)
+library(abind)
+library(tensorr)
+library(dplyr)
+
+options(mc.cores=4)
+par(mar=c(2,2,2,2)) #set margins
+
+ml_flow = matrix(rep(0L, 1*90), ncol=90, nrow=0)
+
+
+```
+
+
+```{r}
+  beta_hill <- function(X_t, k, s) {
+    
+    return ( 1 / (1 + (X_t / k)^(-s)) )
+    #return( beta-((k^s)*beta / ((X_t^s)+(k^s))) )
+  }
+
+  reach <- function(X_t, a, b) {
+    
+    return ( a- (b / (X_t + (b/a ))) )
+    #return( beta-((k^s)*beta / ((X_t^s)+(k^s))) )
+  }
+
+  adsplit <- function(X_t, a, b) {
+    
+    return (   (X_t^a)/((X_t^a)+b) )
+    #return( beta-((k^s)*beta / ((X_t^s)+(k^s))) )
+  }
+  
+  
+ 
+gen_mta_data <- function(num_media, N, max_lag, alpha, beta, k, s, X_tensor2_mta_gen,  nu=0) {
+  
+    lag_weights = array()
+    Y_mta = array()
+    Y_noise_mta = array()
+    cum_effects_hill = matrix(rep(0L, N*num_media), ncol=num_media, nrow=N)
+    epsilon_df =  matrix(rep(0L, N*num_media), ncol=num_media, nrow=N)
+    for (nn in 1:N) {
+        for (media in 1 : num_media) {
+          for (lag in 1 : max_lag) {
+            lag_weights[lag] = alpha[media]^(lag - 1);
+          }
+         #  #print(c("media", media))
+         # # cum_effect_t = Adstock(X_media[nn, media], lag_weights);
+           cum_effect_t = array(X_tensor2_mta_gen[nn, media,])%*%lag_weights;
+    
+          cum_effects_hill[nn, media] = beta_hill(cum_effect_t, k[media], s[media]);
+ 
+        }
+      
+      Y_mta[nn] = nu + cum_effects_hill[nn,]%*%beta[1:num_media] 
+
+    }
+    
+    return (Y_mta)
+}
+
+
+```
+
+
+
+```{r}
+#res_beta_z = array()
+#for (jj in 1:30) {
+# print('')
+# print(c('iter:', jj))
+# print('')
+ 
+N=300
+num_media_mmm_inp = 1
+num_media_mta_gen = 5
+num_media_mta_train = 4
+num_media_mta_gen_inter = 3
+max_lag = 4
+
+#set.seed(123)]\
+X1=abs(rnorm(N, 4.2, 1.5))#abs(rnorm(N, 0, .7))
+#X2=abs(rnorm(N, 3.5, 1.5))#abs(rnorm(N, 0, 1.2))
+#X3=abs(rnorm(N, 1.3, .7))#abs(rnorm(N, 0, .6))
+#set.seed(234)
+X4=abs(rnorm(N, 1.3, .7))#abs(rnorm(N, 0, 1.5))
+#set.seed(345)
+X5=abs(rnorm(N, 1.2, .3))#abs(rnorm(N, 0, 1))
+
+X1_4 = X1*X4
+X1_5 = X1*X5
+X4_5 = X4*X5
+
+
+
+x45_inp_frac = runif(2, .05, .3)
+noise_var_mta = .15#abs(rnorm(1, .1, .03))
+noise_var = abs(rnorm(1, .2, .05))
+#noise_var=.3
+
+imp_cor = c(cor(X1, X4), cor(X1, X5), cor(X4, X5))
+#simulate a campaign only having spend data for 30 days
+#X5[1:(N-cmp_len)] = 0
+
+c_x_media_arr_mta_gen = c(X1, X4*x45_inp_frac[1], X5*x45_inp_frac[2], X1_4, X1_5)
+c_x_media_arr_mta_gen_inter = c(X1_4, X1_5, X4_5)
+c_x_media_arr_mmm_inp = c(X1)
+c_x_media_arr_mta_train = c(X1, X4+X5, X1_4, X1_5)
+
+
+X_mta_gen = matrix(c_x_media_arr_mta_gen[1:(num_media_mta_gen*N)], ncol=num_media_mta_gen)
+X_mta_gen_inter = matrix(c_x_media_arr_mta_gen_inter[1:(num_media_mta_gen_inter*N)], ncol=num_media_mta_gen_inter)
+X_mmm_inp = matrix(c_x_media_arr_mmm_inp[1:(num_media_mmm_inp*N)], ncol=num_media_mmm_inp)
+X_mta_train = matrix(c_x_media_arr_mta_train[1:(num_media_mta_train*N)], ncol=num_media_mta_train)
+
+X_tensor_mta_gen = abind( X_mta_gen,X_mta_gen, along=3 )
+X_tensor_mta_gen_inter = abind( X_mta_gen_inter, X_mta_gen_inter, along=3 )
+X_tensor_mmm_inp = abind( X_mmm_inp,X_mmm_inp, along=3 )
+X_tensor_mta_train = abind( X_mta_train,X_mta_train, along=3 )
+
+#X_tensor = abind( X, along=max_lag )
+
+
+dims_mta_gen= c(N, 5, max_lag)
+arr_mta_gen <- array(X_tensor_mta_gen[1:(num_media_mta_gen*N)], dims_mta_gen)
+dims_mta_gen_inter= c(N, 3, max_lag)
+arr_mta_gen_inter <- array(X_tensor_mta_gen_inter[1:(num_media_mta_gen_inter*N)], dims_mta_gen_inter)
+dims_mmm_inp= c(N, 1, max_lag)
+arr_mmm_inp <- array(X_tensor_mmm_inp[1:(num_media_mmm_inp*N)], dims_mmm_inp)
+dims_mta_train= c(N, num_media_mta_train, max_lag)
+arr_mta_train <- array(X_tensor_mta_train[1:(num_media_mta_train*N)], dims_mta_train)
+
+X_tensor2_mta_gen <- dtensor(arr_mta_gen)
+X_tensor2_mta_gen_inter <- dtensor(arr_mta_gen_inter)
+X_tensor2_mmm_inp <- dtensor(arr_mmm_inp)
+
+
+
+
+
+#set.seed(23442221)
+#beta=abs(rnorm(3, 1, .3))
+beta=runif(3, .5, 1.8)
+#beta_inter =rnorm(3, 0, .3)
+beta_inter =runif(3, -.35, .35)
+
+#set.seed(122)
+alpha = rbeta(3, 5, 10)
+alpha_inter = rbeta(3, 5, 10)
+#alpha[1]=.5
+#set.seed(64)
+k = rbeta(3, 3, 2)
+k_inter = rbeta(3, 3, 2)
+#set.seed(3167)
+s = rgamma(3, 6, 5)
+s_inter = rgamma(3, 6, 5)
+
+
+#psi=c(.5, 1, .75)
+nu=0
+
+#num_media=1
+alpha_mta_gen = c(alpha, alpha_inter[1:2])
+beta_mta_gen = c( beta, beta_inter[1:2])
+k_mta_gen = c(k, k_inter[1:2])
+s_mta_gen = c(s, s_inter[1:2])
+
+Y_mta = gen_mta_data (num_media_mta_gen, N, max_lag, alpha_mta_gen, beta_mta_gen, k_mta_gen, s_mta_gen, X_tensor2_mta_gen )
+#Y_mta_inter = gen_mta_data (num_media_mta_gen_inter, N, max_lag, alpha_inter, beta_inter, k_inter, s_inter, X_tensor2_mta_gen_inter )
+
+
+epsilon = rnorm(length(Y_mta), 1, noise_var_mta)
+#Y_noise_mta[nn] =  (epsilon*cum_effects_hill[nn,])%*%beta[1:num_media]
+#Y_noise_mta_full = (Y_mta+Y_mta_inter)*epsilon
+Y_noise_mta_full = Y_mta*epsilon
+
+      
+      
+      
+
+fit150_getmtapriors <- stan(file='/Users/gregmurray/Documents/DS/Northbeam_MMM_sim_geom.stan',data=list(N=N, Y=Y_noise_mta_full, max_lag=max_lag, num_media=(2), num_media_inter=(2), num_media_full=(4), X_media=arr_mta_train), chains=4, iter=4000, warmup=1000,pars=c("noise_var","alpha","beta_medias_full", "x_bias_factors_adj", "k", "slope") )
+print(fit150_getmtapriors, pars=c( "noise_var","alpha", "beta_medias_full","x_bias_factors_adj", "k", "slope"))
+
+
+#fit_ss_priors <- extract(fit150_getmtapriors, permuted = TRUE) 
+#params_z = get_params(fit_ss_priors, num_media=1)
+#res_beta_z[jj]=params_z[2]
+#}
+
+#sum(res_beta_z>1.6)
+#mean(res_beta_z)
+#res_beta_z[31] = beta[1]
+
+#prior_expl = matrix(nrow=0, ncol=31)
+#prior_expl = rbind(prior_expl, res_beta_z)
+
+
+fit_getmtapriors <- extract(fit150_getmtapriors, permuted = TRUE) # fit_ss is a list 
+## list fit_ss should have elements with name 'alpha', 'beta', 'lp__'
+num_media = 4
+
+
+alpha_hat_getmtapriors <-fit_getmtapriors$alpha
+alpha_hat2_getmtapriors = rep(0L, num_media)
+alpha_sd2_getmtapriors = rep(0L, num_media)
+for(i in 1:num_media) {
+  alpha_hat2_getmtapriors[[i]] = mean(alpha_hat_getmtapriors[1:nrow(alpha_hat_getmtapriors),i])
+  alpha_sd2_getmtapriors[[i]] = sd(alpha_hat_getmtapriors[1:nrow(alpha_hat_getmtapriors),i])
+}
+
+beta_hat_getmtapriors <-fit_getmtapriors$beta_medias_full
+beta_hat2_getmtapriors = rep(0L, num_media)
+beta_sd2_getmtapriors = rep(0L, num_media)
+for(i in 1:num_media) {
+  beta_hat2_getmtapriors[[i]] = mean(beta_hat_getmtapriors[1:nrow(beta_hat_getmtapriors),i])
+  beta_sd2_getmtapriors[[i]] = sd(beta_hat_getmtapriors[1:nrow(beta_hat_getmtapriors),i])
+}
+
+k_hat_getmtapriors <-fit_getmtapriors$k
+k_hat2_getmtapriors = rep(0L, num_media)
+k_sd2_getmtapriors = rep(0L, num_media)
+for(i in 1:num_media) {
+  k_hat2_getmtapriors[[i]] = mean(k_hat_getmtapriors[1:nrow(k_hat_getmtapriors),i])
+  k_sd2_getmtapriors[[i]] = sd(k_hat_getmtapriors[1:nrow(k_hat_getmtapriors),i])
+
+}
+
+slope_hat_getmtapriors <-fit_getmtapriors$slope
+slope_hat2_getmtapriors = rep(0L, num_media)
+slope_sd2_getmtapriors = rep(0L, num_media)
+for(i in 1:num_media) {
+  slope_hat2_getmtapriors[[i]] = mean(slope_hat_getmtapriors[1:nrow(slope_hat_getmtapriors),i])
+  slope_sd2_getmtapriors[[i]] = sd(slope_hat_getmtapriors[1:nrow(slope_hat_getmtapriors),i])
+}
+
+x45p_hat_getmtapriors <-fit_getmtapriors$x_bias_factors_adj
+x45p_hat2_getmtapriors = mean(x45p_hat_getmtapriors[1:nrow(x45p_hat_getmtapriors)])
+  x45p_sd2_hat2_getmtapriors = sd(x45p_hat_getmtapriors[1:nrow(x45p_hat_getmtapriors)])
+
+
+
+mta_mn_priors = c(alpha_hat2_getmtapriors[1], beta_hat2_getmtapriors[1], k_hat2_getmtapriors[1], slope_hat2_getmtapriors[1])
+
+mta_sd_priors = c(alpha_sd2_getmtapriors[1], beta_sd2_getmtapriors[1], k_sd2_getmtapriors[1], slope_sd2_getmtapriors[1])
+
+mta_betainter_mn_priors = c(beta_hat2_getmtapriors[3], beta_hat2_getmtapriors[4])
+mta_betainter_sd_priors = c(beta_sd2_getmtapriors[3], beta_sd2_getmtapriors[4])
+mta_kinter_mn_priors = c(k_hat2_getmtapriors[3], k_hat2_getmtapriors[4])
+mta_kinter_sd_priors = c(k_sd2_getmtapriors[3], k_sd2_getmtapriors[4])
+
+
+hyp_prior_means = c(.5, 1.5)
+if (mta_mn_priors[1]>hyp_prior_means[1]) { 
+  alpha_defl_factor = .63
+} else { alpha_defl_factor = .45}
+
+if (mta_mn_priors[2]>hyp_prior_means[2]) { 
+  beta_defl_factor = .65
+} else { beta_defl_factor = .5}
+
+
+c_x_media_arr_final_mmm_inp = c(X1, X4, X5, X1_4, X1_5, X4_5)
+num_media_final_mmm_inp=6
+
+X_final_mmm_inp = matrix(c_x_media_arr_final_mmm_inp[1:(num_media_final_mmm_inp*N)], ncol=num_media_final_mmm_inp)
+
+X_tensor_final_mmm_inp = abind( X_final_mmm_inp , X_final_mmm_inp, along=3 )
+
+#X_tensor = abind( X, along=max_lag )
+
+
+dims_final_mmm_inp= c(N, 6, max_lag)
+arr_final_mmm_inp <- array(X_tensor_final_mmm_inp[1:(num_media_final_mmm_inp*N)], dims_final_mmm_inp)
+
+X_tensor2_final_inp <- dtensor(arr_final_mmm_inp)
+
+
+nu=1.5
+
+num_media_final_mmm_inp
+
+alpha_full = c(alpha, alpha_inter)
+beta_full = c(beta, beta_inter)
+k_full = c(k, k_inter)
+s_full = c(s, s_inter)
+
+Y_final = gen_mta_data (num_media_final_mmm_inp, N, max_lag, alpha_full, beta_full, k_full, s_full, X_tensor2_final_inp , nu=nu)
+
+epsilon = rnorm(length(Y_final), 1, noise_var)
+#Y_noise_mta[nn] =  (epsilon*cum_effects_hill[nn,])%*%beta[1:num_media]
+Y_noise_full = Y_final*epsilon
+      
+
+
+#using MTA priors
+fit150_final <- stan(file='/Users/gregmurray/Documents/DS/Northbeam_MMM_sim_final_geom.stan',data=list(N=N, Y=Y_noise_full, max_lag=max_lag, num_params=4, mta_mn_priors=mta_mn_priors, mta_sd_priors=mta_sd_priors,mta_betainter_mn_priors=mta_betainter_mn_priors, mta_betainter_sd_priors=mta_betainter_sd_priors, mta_kinter_mn_priors=mta_kinter_mn_priors, mta_kinter_sd_priors=mta_kinter_sd_priors,  num_media=(3),num_media_inter=(3),num_media_full=(6), X_media=arr_final_mmm_inp), chains=4, iter=3000, warmup=1000,pars=c("noise_var","nu", "alpha", "beta_medias", "beta_medias_inter", "k", "slope") )
+print(fit150_final, pars=c( "noise_var","nu", "alpha", "beta_medias","beta_medias_inter", "k", "slope"))
+
+
+fit150_nomta <- stan(file='/Users/gregmurray/Documents/DS/Northbeam_MMM_sim_nomta_geom.stan',data=list(N=N, Y=Y_noise_full, max_lag=max_lag, num_params=4,   num_media=(3),num_media_inter=(3),num_media_full=(6), X_media=arr_final_mmm_inp), chains=4, iter=3000, warmup=1000,pars=c("noise_var","nu", "alpha", "beta_medias", "beta_medias_inter", "k", "slope") )
+print(fit150_nomta, pars=c( "noise_var","nu", "alpha", "beta_medias","beta_medias_inter", "k", "slope"))
+
+
+
+
+#Create input tensor with only MTA-involved impressions
+X0 = rep(0L, length(X1))
+c_x_media_arr_mta_actual = c(X1, X0, X0, X1_4, X1_5, X0)
+num_media_final_mmm_inp=6
+X_final_mta_actual = matrix(c_x_media_arr_mta_actual[1:(num_media_final_mmm_inp*N)], ncol=num_media_final_mmm_inp)
+
+X_tensor_mta_actual = abind( X_final_mta_actual , X_final_mta_actual, along=3 )
+
+dims_final_mmm_inp= c(N, 6, max_lag)
+arr_final_mta_actual <- array(X_tensor_mta_actual[1:(num_media_final_mmm_inp*N)], dims_final_mmm_inp)
+
+X_tensor2_mta_actual <- dtensor(arr_final_mta_actual)
+
+
+#Get the actual MTA revenue for comparison to get MAPEs
+Y_mta_actual = gen_mta_data (num_media_final_mmm_inp, N, max_lag, alpha_full, beta_full, k_full, s_full, X_tensor2_mta_actual , nu=0)
+
+
+#// predict and measure performance
+
+get_params <- function(fit_ss, num_media=6) {
+
+      alpha_hat <-fit_ss$alpha
+      alpha_hat2 = rep(0L, num_media)
+      for(i in 1:num_media) {
+        alpha_hat2[[i]] = mean(alpha_hat[1:nrow(alpha_hat),i])
+      }
+      
+      beta_hat <-fit_ss$beta_medias
+      beta_hat2 = rep(0L, 3)
+      for(i in 1:3) {
+        beta_hat2[[i]] = mean(beta_hat[1:nrow(beta_hat),i])
+      }
+      
+      beta_inter_hat <-fit_ss$beta_medias_inter
+      beta_inter_hat2 = rep(0L, 3)
+      for(i in 1:3) {
+        beta_inter_hat2[[i]] = mean(beta_inter_hat[1:nrow(beta_inter_hat),i])
+      }
+
+      
+      k_hat <-fit_ss$k
+      k_hat2 = rep(0L, num_media)
+      for(i in 1:num_media) {
+        k_hat2[[i]] = mean(k_hat[1:nrow(k_hat),i])
+      }
+      
+      slope_hat <-fit_ss$slope
+      slope_hat2 = rep(0L, num_media)
+      for(i in 1:num_media) {
+        slope_hat2[[i]] = mean(slope_hat[1:nrow(slope_hat),i])
+      }
+      
+      return (c(alpha_hat2, beta_hat2, beta_inter_hat2, k_hat2, slope_hat2))
+}
+
+
+
+
+fit_ss_bumm <- extract(fit150_final, permuted = TRUE) 
+#fit_ss_bumm1 <- extract(fit150_final, permuted = TRUE) 
+#fit_ss_bumm2 <- extract(fit150_final, permuted = TRUE) 
+fit_ss_nomta <- extract(fit150_nomta, permuted = TRUE) 
+
+#fit_ss_priors <- extract(fit150_getmtapriors, permuted = TRUE) 
+
+num_media = 1
+
+
+params_bumm = get_params(fit_ss_bumm)
+params_nomta = get_params(fit_ss_nomta)
+params_bumm[19:24]=params_nomta[19:24]
+Y_mta_pred = gen_mta_data (num_media_final_mmm_inp, N, max_lag, params_bumm[1:6], params_bumm[7:12], params_bumm[13:18], params_bumm[19:24], X_tensor2_mta_actual , nu=0)
+MAPE_mn_bumm_t = mean(abs((Y_mta_pred-Y_mta_actual)/Y_mta_actual))
+MAPE_mn_bumm_agg = (sum(Y_mta_pred)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+
+#params_priors = get_params(fit_ss_priors)
+#Y_priors_pred = gen_mta_data (num_media_final_mmm_inp, N, max_lag, params_priors[1:6], params_priors[7:12], params_priors[13:18], params_priors[19:24], X_tensor2_mta_actual , nu=0, add_nu=FALSE)
+#MAPE_priors_t = mean(abs((Y_priors_pred-Y_mta_actual)/Y_mta_actual))
+#MAPE_priors_agg = (sum(Y_priors_pred)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+params_nomta = get_params(fit_ss_nomta)
+Y_nomta_pred = gen_mta_data (num_media_final_mmm_inp, N, max_lag, params_nomta[1:6], params_nomta[7:12], params_nomta[13:18], params_nomta[19:24], X_tensor2_mta_actual , nu=0)
+MAPE_mn_nomta_t = mean(abs((Y_nomta_pred-Y_mta_actual)/Y_mta_actual))
+MAPE_mn_nomta_agg = (sum(Y_nomta_pred)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+
+
+
+
+get_gen_preds <- function(alpha_hat, beta_hat, k_hat, slope_hat, N, num_media, max_lag, X_tensor2_mmm_inp, draws=1000) {
+      
+      #draws=length(alpha_hat)
+      #draws=1000
+      Y_hat_res = matrix(rep(0L, N), ncol=N, nrow=1)
+      
+      for(i in 1:draws) {
+
+        lag_weights = array()
+        Y_hat=array()
+        cum_effects_hill_hat = matrix(rep(0L, N*num_media), ncol=num_media, nrow=N)
+        for (nn in 1:N) {
+           for (media in 1 : num_media) {
+              for (lag in 1 : max_lag) {
+                lag_weights[lag] = alpha_hat[i, media]^(lag - 1);
+              }
+              cum_effect_t_hat = array(X_tensor2_mmm_inp[nn, media,])%*%lag_weights;
+  
+              cum_effects_hill_hat[nn, media] = beta_hill(cum_effect_t_hat, k_hat[i, media], slope_hat[i, media]);
+            }
+          
+          Y_hat[nn] = cum_effects_hill_hat[nn,]%*%beta_hat[i,];
+      }
+      Y_hat_res = rbind(Y_hat_res, Y_hat)
+      }
+  Y_hat_res_df= as.data.frame(Y_hat_res)
+  Y_hat_res_df = filter(Y_hat_res_df, V1>0)
+  return (Y_hat_res_df)
+
+}
+
+
+alpha_hat <-fit_ss_bumm$alpha
+alpha_hat = alpha_hat[, c(1,4:5)]
+beta_hat <-fit_ss_bumm$beta_medias
+beta_hat = beta_hat[, 1]
+beta_inter_hat <-fit_ss_bumm$beta_medias_inter
+beta_inter_hat = beta_inter_hat[, 1:2]
+k_hat <-fit_ss_bumm$k
+k_hat = k_hat[, c(1,4:5)]
+slope_hat <-fit_ss_bumm$slope
+slope_hat = slope_hat[, c(1,4:5)]
+
+beta_hat_full = cbind(beta_hat, beta_inter_hat)
+
+X_tensor2_mta_actual2 = X_tensor2_mta_actual[, c(1, 4:5), ]
+
+Y_hat_res = get_gen_preds(alpha_hat, beta_hat_full, k_hat, slope_hat,  N, 3, max_lag, X_tensor2_mta_actual2)
+lp_norm = fit_ss_bumm$lp__[1:nrow(Y_hat_res)]/sum(fit_ss_bumm$lp__[1:nrow(Y_hat_res)])
+Y_hat_res2 = t(Y_hat_res)%*%lp_norm
+MAPE_smp_bumm_t = mean(abs((Y_hat_res2-Y_mta_actual)/Y_mta_actual))
+MAPE_smp_bumm_agg = (sum(Y_hat_res2)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+Y_hat_res3 = (Y_hat_res2+Y_mta_pred)/2
+MAPE_hyb_bumm_t = mean(abs((Y_hat_res3-Y_mta_actual)/Y_mta_actual))
+MAPE_hyb_bumm_agg = (sum(Y_hat_res3)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+
+
+alpha_hat <-fit_ss_nomta$alpha
+alpha_hat = alpha_hat[, c(1,4:5)]
+beta_hat <-fit_ss_nomta$beta_medias
+beta_hat = beta_hat[, 1]
+beta_inter_hat <-fit_ss_nomta$beta_medias_inter
+beta_inter_hat = beta_inter_hat[, 1:2]
+k_hat <-fit_ss_nomta$k
+k_hat = k_hat[, c(1,4:5)]
+slope_hat <-fit_ss_nomta$slope
+slope_hat = slope_hat[, c(1,4:5)]
+
+beta_hat_full = cbind(beta_hat, beta_inter_hat)
+
+X_tensor2_mta_actual2 = X_tensor2_mta_actual[, c(1, 4:5), ]
+
+Y_hat_res = get_gen_preds(alpha_hat, beta_hat_full,k_hat,  slope_hat, N, 3, max_lag, X_tensor2_mta_actual2)
+lp_norm = fit_ss_nomta$lp__[1:nrow(Y_hat_res)]/sum(fit_ss_nomta$lp__[1:nrow(Y_hat_res)])
+Y_hat_res2 = t(Y_hat_res)%*%lp_norm
+MAPE_smp_nomta_t = mean(abs((Y_hat_res2-Y_mta_actual)/Y_mta_actual))
+MAPE_smp_nomta_agg = (sum(Y_hat_res2)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+Y_hat_res3 = (Y_nomta_pred+Y_hat_res2)/2
+MAPE_hyb_nomta_t = mean(abs((Y_hat_res3-Y_mta_actual)/Y_mta_actual))
+MAPE_hyb_nomta_agg = (sum(Y_hat_res3)-sum(Y_mta_actual))/sum(Y_mta_actual)
+
+total_mn_bumm_rev = sum(Y_all_pred_bumm)
+
+
+
+
+
+params_bumm = get_params(fit_ss_bumm)
+params_nomta = get_params(fit_ss_nomta)
+params_bumm[19:24]=params_nomta[19:24]
+nu_hat = mean(fit_ss_bumm$nu)
+Y_all_pred_bumm = gen_mta_data (num_media_final_mmm_inp, N, max_lag, params_bumm[1:6], params_bumm[7:12], params_bumm[13:18], params_bumm[19:24], X_tensor2_final_inp , nu=nu_hat)
+#MAPE_all_mn_bumm_t = mean(abs((Y_all_pred_bumm-Y_noise_full)/Y_noise_full))
+MAPE_all_mn_bumm_agg = (sum(Y_all_pred_bumm)-sum(Y_noise_full))/sum(Y_noise_full)
+
+
+params_nomta = get_params(fit_ss_nomta)
+nu_hat = mean(fit_ss_nomta$nu)
+Y_all_pred_nomta = gen_mta_data (num_media_final_mmm_inp, N, max_lag, params_nomta[1:6], params_nomta[7:12], params_nomta[13:18], params_nomta[19:24], X_tensor2_final_inp , nu=nu_hat)
+#MAPE_all_mn_nomta_t = mean(abs((Y_all_pred_nomta-Y_noise_full)/Y_noise_full))
+MAPE_all_mn_nomta_agg = (sum(Y_all_pred_nomta)-sum(Y_noise_full))/sum(Y_noise_full)
+
+total_mn_nomta_rev = sum(Y_all_pred_nomta)
+
+
+get_all_gen_preds <- function(alpha_hat, beta_hat, k_hat, slope_hat, nu_hat, N, num_media, max_lag, X_tensor2_mmm_inp, draws=1000) {
+      
+      #draws=length(alpha_hat)
+      #draws=1000
+      Y_hat_res = matrix(rep(0L, N), ncol=N, nrow=1)
+      
+      for(i in 1:draws) {
+
+        lag_weights = array()
+        Y_hat=array()
+        cum_effects_hill_hat = matrix(rep(0L, N*num_media), ncol=num_media, nrow=N)
+        for (nn in 1:N) {
+           for (media in 1 : num_media) {
+              for (lag in 1 : max_lag) {
+                lag_weights[lag] = alpha_hat[i, media]^(lag - 1);
+              }
+              cum_effect_t_hat = array(X_tensor2_mmm_inp[nn, media,])%*%lag_weights;
+  
+              cum_effects_hill_hat[nn, media] = beta_hill(cum_effect_t_hat, k_hat[i, media], slope_hat[i, media]);
+            }
+          
+          Y_hat[nn] = nu_hat[i] + cum_effects_hill_hat[nn,]%*%beta_hat[i,];
+      }
+      Y_hat_res = rbind(Y_hat_res, Y_hat)
+      }
+  Y_hat_res_df= as.data.frame(Y_hat_res)
+  Y_hat_res_df = filter(Y_hat_res_df, V1>0)
+  return (Y_hat_res_df)
+
+}
+
+
+alpha_hat_bumm <-fit_ss_bumm$alpha
+nu_hat_bumm <-fit_ss_bumm$nu
+beta_hat_bumm <-fit_ss_bumm$beta_medias
+beta_inter_hat_bumm <-fit_ss_bumm$beta_medias_inter
+k_hat_bumm <-fit_ss_bumm$k
+slope_hat_bumm <-fit_ss_bumm$slope
+
+beta_hat_full_bumm = cbind(beta_hat_bumm, beta_inter_hat_bumm)
+
+Y_hat_res_bumm = get_all_gen_preds(alpha_hat_bumm, beta_hat_full_bumm, k_hat_bumm, slope_hat_bumm, nu_hat_bumm, N, 6, max_lag, X_tensor2_final_inp, draws=1000)
+
+lp_norm = fit_ss_bumm$lp__[1:nrow(Y_hat_res_bumm)]/sum(fit_ss_bumm$lp__[1:nrow(Y_hat_res_bumm)])
+Y_hat_res_bumm2 = t(Y_hat_res_bumm)%*%lp_norm
+
+MAPE_all_smp_bumm_t = mean(abs((Y_hat_res_bumm2-Y_noise_full)/Y_noise_full))
+MAPE_all_smp_bumm_agg = (sum(Y_hat_res_bumm2)-sum(Y_noise_full))/sum(Y_noise_full)
+
+Y_hat_res3 = (Y_hat_res_bumm2+Y_all_pred_bumm)/2
+MAPE_all_hyb_bumm_t = mean(abs((Y_hat_res3-Y_noise_full)/Y_noise_full))
+MAPE_all_hyb_bumm_agg = (sum(Y_hat_res3)-sum(Y_noise_full))/sum(Y_noise_full)
+
+
+total_smp_bumm_rev = sum(Y_hat_res_bumm2)
+total_hyb_bumm_rev = sum(Y_hat_res3)
+
+
+
+alpha_hat_nomta <-fit_ss_nomta$alpha
+nu_hat_nomta <-fit_ss_nomta$nu
+beta_hat_nomta <-fit_ss_nomta$beta_medias
+beta_inter_hat_nomta <-fit_ss_nomta$beta_medias_inter
+k_hat_nomta <-fit_ss_nomta$k
+slope_hat_nomta <-fit_ss_nomta$slope
+
+beta_hat_full_nomta = cbind(beta_hat_nomta, beta_inter_hat_nomta)
+
+Y_hat_res_nomta = get_all_gen_preds(alpha_hat_nomta, beta_hat_full_nomta, k_hat_nomta, slope_hat_nomta, nu_hat_nomta, N, 6, max_lag, X_tensor2_final_inp, draws=1000)
+
+lp_norm = fit_ss_nomta$lp__[1:nrow(Y_hat_res_nomta)]/sum(fit_ss_nomta$lp__[1:nrow(Y_hat_res_nomta)])
+Y_hat_res_nomta2 = t(Y_hat_res_nomta)%*%lp_norm
+
+MAPE_all_smp_nomta_t = mean(abs((Y_hat_res_nomta2-Y_noise_full)/Y_noise_full))
+MAPE_all_smp_nomta_agg = (sum(Y_hat_res_nomta2)-sum(Y_noise_full))/sum(Y_noise_full)
+
+Y_hat_res3 = (Y_hat_res_nomta2+Y_all_pred_nomta)/2
+MAPE_all_hyb_nomta_t = mean(abs((Y_hat_res3-Y_noise_full)/Y_noise_full))
+MAPE_all_hyb_nomta_agg = (sum(Y_hat_res3)-sum(Y_noise_full))/sum(Y_noise_full)
+
+total_hyb_nomta_rev = sum(Y_hat_res3)
+total_smp_nomta_rev = sum(Y_hat_res_nomta2)
+
+
+
+alpha_hat_bumm <-fit_ss_bumm$alpha
+alpha_hat_bumm[, 1] = alpha_hat_nomta[, 1]
+nu_hat_bumm <-fit_ss_bumm$nu
+beta_hat_bumm <-fit_ss_bumm$beta_medias
+beta_hat_bumm[, 1] = beta_hat_nomta[, 1]
+beta_inter_hat_bumm <-fit_ss_bumm$beta_medias_inter
+beta_inter_hat_bumm[, 1] = beta_inter_hat_nomta[, 1]
+k_hat_bumm <-fit_ss_bumm$k
+k_hat_bumm[, 1] = k_hat_nomta[, 1]
+slope_hat_bumm <-fit_ss_bumm$slope
+slope_hat_bumm[, 1] = slope_hat_nomta[, 1]
+
+
+beta_hat_full_bumm = cbind(beta_hat_bumm, beta_inter_hat_bumm)
+
+Y_hat_res_bumm = get_all_gen_preds(alpha_hat_bumm, beta_hat_full_bumm, k_hat_bumm, slope_hat_bumm, nu_hat_bumm, N, 6, max_lag, X_tensor2_final_inp, draws=1000)
+
+lp_norm = fit_ss_bumm$lp__[1:nrow(Y_hat_res_bumm)]/sum(fit_ss_bumm$lp__[1:nrow(Y_hat_res_bumm)])
+Y_hat_res_bumm2 = t(Y_hat_res_bumm)%*%lp_norm
+
+MAPE_all_mxd_smp_bumm_t = mean(abs((Y_hat_res_bumm2-Y_noise_full)/Y_noise_full))
+MAPE_all_mxd_smp_bumm_agg = (sum(Y_hat_res_bumm2)-sum(Y_noise_full))/sum(Y_noise_full)
+
+Y_hat_res3 = (Y_hat_res_bumm2+Y_all_pred_bumm)/2
+MAPE_all_mxd_hyb_bumm_t = mean(abs((Y_hat_res3-Y_noise_full)/Y_noise_full))
+MAPE_all_mxd_hyb_bumm_agg = (sum(Y_hat_res3)-sum(Y_noise_full))/sum(Y_noise_full)
+
+
+
+alpha_hat_bumm <-fit_ss_bumm$alpha
+beta_hat_bumm <-fit_ss_bumm$beta_medias
+beta_inter_hat_bumm <-fit_ss_bumm$beta_medias_inter
+k_hat_bumm <-fit_ss_bumm$k
+slope_hat_bumm <-fit_ss_bumm$slope
+
+alpha_hat_nomta <-fit_ss_nomta$alpha
+alpha_hat_nomta[, 1] = alpha_hat_bumm[, 1]
+nu_hat_nomta <-fit_ss_nomta$nu
+beta_hat_nomta <-fit_ss_nomta$beta_medias
+beta_hat_nomta[, 1] = beta_hat_bumm[, 1]
+beta_inter_hat_nomta <-fit_ss_nomta$beta_medias_inter
+beta_inter_hat_nomta[, 1] = beta_inter_hat_bumm[, 1]
+k_hat_nomta <-fit_ss_nomta$k
+k_hat_nomta[, 1] = k_hat_bumm[, 1]
+slope_hat_nomta <-fit_ss_nomta$slope
+#slope_hat_nomta[, 1] = slope_hat_bumm[, 1]
+
+beta_hat_full_nomta = cbind(beta_hat_nomta, beta_inter_hat_nomta)
+
+Y_hat_res_nomta = get_all_gen_preds(alpha_hat_nomta, beta_hat_full_nomta, k_hat_nomta, slope_hat_nomta, nu_hat_nomta, N, 6, max_lag, X_tensor2_final_inp, draws=1000)
+
+lp_norm = fit_ss_nomta$lp__[1:nrow(Y_hat_res_nomta)]/sum(fit_ss_nomta$lp__[1:nrow(Y_hat_res_nomta)])
+Y_hat_res_nomta2 = t(Y_hat_res_nomta)%*%lp_norm
+
+MAPE_all_mxd_smp_nomta_t = mean(abs((Y_hat_res_nomta2-Y_noise_full)/Y_noise_full))
+MAPE_all_mxd_smp_nomta_agg = (sum(Y_hat_res_nomta2)-sum(Y_noise_full))/sum(Y_noise_full)
+
+Y_hat_res3 = (Y_hat_res_nomta2+Y_all_pred_nomta)/2
+MAPE_all_mxd_hyb_nomta_t = mean(abs((Y_hat_res3-Y_noise_full)/Y_noise_full))
+MAPE_all_mxd_hyb_nomta_agg = (sum(Y_hat_res3)-sum(Y_noise_full))/sum(Y_noise_full)
+
+
+
+ml_flow2 = rbind(ml_flow2, c(noise_var, x45_inp_frac, alpha[1], beta[1], k[1], s[1],alpha_inter[1:2], beta_inter[1:2], k_inter[1:2], s_inter[1:2], alpha_hat2_getmtapriors, params_bumm[1], beta_hat2_getmtapriors, params_bumm[2],  k_hat2_getmtapriors, params_bumm[3], slope_hat2_getmtapriors, params_bumm[4],  alpha_sd2_getmtapriors, beta_sd2_getmtapriors, k_sd2_getmtapriors, slope_sd2_getmtapriors, imp_cor, MAPE_mn_bumm_t, MAPE_mn_bumm_agg,MAPE_mn_nomta_t, MAPE_mn_nomta_agg,MAPE_smp_bumm_t, MAPE_smp_bumm_agg, MAPE_smp_nomta_t, MAPE_smp_nomta_agg, MAPE_all_mn_bumm_agg, MAPE_all_mn_nomta_agg, MAPE_all_smp_bumm_agg, MAPE_all_smp_nomta_agg, MAPE_all_hyb_bumm_t, MAPE_all_hyb_nomta_t, MAPE_all_hyb_bumm_agg, MAPE_all_hyb_nomta_agg,MAPE_all_mxd_smp_bumm_t, MAPE_all_mxd_smp_bumm_agg, MAPE_all_mxd_hyb_bumm_t, MAPE_all_mxd_hyb_bumm_agg, MAPE_all_mxd_smp_nomta_t, MAPE_all_mxd_smp_nomta_agg, MAPE_all_mxd_hyb_nomta_t, MAPE_all_mxd_hyb_nomta_agg, total_mn_bumm_rev, total_mn_nomta_rev, total_smp_bumm_rev, total_smp_nomta_rev,
+total_hyb_bumm_rev, total_hyb_nomta_rev, MAPE_hyb_bumm_t, MAPE_hyb_bumm_agg, MAPE_hyb_nomta_t, MAPE_hyb_nomta_agg, x45p_hat2_getmtapriors, x45p_sd2_hat2_getmtapriors))
+
+
+
+
+write.csv(ml_flow2, '/Users/gregmurray/Documents/DS/ml_flow_geom_5_3.csv')
+
+
+print(c('BUMM model Aggregate MAPE:', MAPE_hyb_bumm_agg))
+print(c('No MTA model Aggregate MAPE:', MAPE_hyb_nomta_agg))
+
+```
+```{r}
+
+get_mxd_preds <- function(alpha_hat, beta_hat, k_hat, slope_hat, N, num_media, max_lag, X_tensor2_mmm_inp) {
+      
+      lag_weights = array()
+      Y_hat = array()
+      cum_effects_hill_hat = matrix(rep(0L, N*num_media), ncol=num_media, nrow=N)
+      for (nn in 1:N) {
+         for (media in 1 : num_media) {
+            for (lag in 1 : max_lag) {
+              lag_weights[lag] = alpha_hat[media]^(lag - 1);
+            }
+            cum_effect_t_hat = array(X_tensor2_mmm_inp[nn, media,])%*%lag_weights;
+
+            cum_effects_hill_hat[nn, media] = beta_hill(cum_effect_t_hat, k_hat[media], slope_hat[media]);
+          }
+        
+        Y_hat[nn] =  cum_effects_hill_hat[nn,]%*%beta_hat[1:num_media];
+      }
+      
+      return (Y_hat)
+}
+
+get_mxd_perf <- function(fit_ss,alpha_hat2_mxd, beta_hat2_mxd, k_hat2_mxd, slope_hat2_mxd, N, num_media, max_lag, X_tensor2_final_inp) {
+  
+    
+    Y_hat_mxd = get_mxd_preds(alpha_hat2_mxd, beta_hat2_mxd, k_hat2_mxd, slope_hat2_mxd, N, 3, max_lag, X_tensor2_final_inp)
+    
+    MAPE_mxd = mean(abs((Y_hat_mxd-Y_noise)/Y_noise))
+
+  return (MAPE_mxd)
+}
+
+
+MAPE_bumm_mxd = get_mxd_perf(fit_ss_bumm, N, 3, max_lag,X_tensor2_final_inp)
+MAPE_nomta_mxd = get_mxd_perf(fit_ss_nomta, N, 3, max_lag,X_tensor2_final_inp)
+
+
+fit_ss = fit_ss_bumm
+
+alpha_hat_mxd <-fit_ss_bumm$alpha
+    alpha_hat2_mxd = rep(0L, num_media)
+    for(i in 1:3) {
+      alpha_hat2_mxd[[i]] = mean(alpha_hat_mxd[1:nrow(alpha_hat_mxd),i])
+    }
+#alpha_hat2_mxd[1]=params_bumm[1]
+    
+beta_hat_mxd <-fit_ss_bumm$beta
+beta_hat2_mxd = rep(0L, num_media)
+for(i in 1:3) {
+  beta_hat2_mxd[[i]] = mean(beta_hat_mxd[1:nrow(beta_hat_mxd),i])
+}
+#beta_hat2_mxd[1]=params_bumm[2]
+
+k_hat_mxd <-fit_ss_bumm$k
+k_hat2_mxd = rep(0L, num_media)
+for(i in 1:3) {
+  k_hat2_mxd[[i]] = mean(k_hat_mxd[1:nrow(k_hat_mxd),i])
+}
+#k_hat2_mxd[1]=params_bumm[3]
+
+slope_hat_mxd <-fit_ss_nomta$slope
+slope_hat2_mxd = rep(0L, num_media)
+for(i in 1:3) {
+  slope_hat2_mxd[[i]] = mean(slope_hat_mxd[1:nrow(slope_hat_mxd),i])
+}
+#slope_hat2_mxd[1]=params_bumm[4]
+
+
+mxd_hybrid_perf = get_mxd_perf(fit_ss, alpha_hat2_mxd, beta_hat2_mxd, k_hat2_mxd, slope_hat2_mxd, N, num_media, max_lag, X_tensor2_final_inp) 
+
+alpha_hat2_mxd
+beta_hat2_mxd
+k_hat2_mxd
+slope_hat2_mxd
+```
+
+```{r}
+
+alpha_hat2_mxd
+beta_hat2_mxd
+k_hat2_mxd
+slope_hat2_mxd
+```
+
+```{r}
+
+ml_flow = fread('/Users/gregmurray/Documents/DS/ml_flow_adj.csv')
+
+ml_flow$MAPE_diff1 = ml_flow$MAPE_nomta_t-ml_flow$MAPE_bumm_t
+ml_flow$MAPE_diff2 = ml_flow$MAPE_priors_t-ml_flow$MAPE_bumm_t
+ml_flow$min_MAPE_alt = min(ml_flow$MAPE_nomta_t, ml_flow$MAPE_priors_t)
+
+ml_flow$alpha_prior_est_ratio = ml_flow$alpha_mtaprior/ml_flow$alpha_bumm
+ml_flow$beta_prior_est_ratio = ml_flow$beta_mtaprior/ml_flow$beta_bumm
+ml_flow$k_prior_est_ratio = ml_flow$slope_mtaprior/ml_flow$k_bumm
+ml_flow$slope_prior_est_ratio = ml_flow$slope_mtaprior/ml_flow$slope_bumm
+
+
+res_inf = glm(bumm_better~alpha_prior_est_ratio+beta_prior_est_ratio+k_prior_est_ratio+slope_prior_est_ratio+noise_var+log(beta_defl_fact)+log(alpha_defl_fact)+log(beta_sd_infl_fact), data=ml_flow, family='binomial')
+print(summary(res_inf))
+
+z = ml_flow %>% select(alpha_mtaprior,alpha_bumm, alpha_defl_fact, alpha_prior_est_ratio,MAPE_diff1, MAPE_bumm_t, MAPE_nomta_t)
+```
+
+```{r}
+
+'''
+    alpha_hat_mxd <-fit_ss$alpha
+    alpha_hat2_mxd = rep(0L, num_media)
+    for(i in 1:num_media) {
+      alpha_hat2_mxd[[i]] = mean(alpha_hat_mxd[1:nrow(alpha_hat_mxd),i])
+    }
+    
+    beta_hat_mxd <-fit_ss$beta
+    beta_hat2_mxd = rep(0L, num_media)
+    for(i in 1:num_media) {
+      beta_hat2_mxd[[i]] = mean(beta_hat_mxd[1:nrow(beta_hat_mxd),i])
+    }
+    
+    k_hat_mxd <-fit_ss$k
+    k_hat2_mxd = rep(0L, num_media)
+    for(i in 1:num_media) {
+      k_hat2_mxd[[i]] = mean(k_hat_mxd[1:nrow(k_hat_mxd),i])
+    }
+    
+    slope_hat_mxd <-fit_ss$slope
+    slope_hat2_mxd = rep(0L, num_media)
+    for(i in 1:num_media) {
+      slope_hat2_mxd[[i]] = mean(slope_hat_mxd[1:nrow(slope_hat_mxd),i])
+    }
+
+    '''
+```
+
