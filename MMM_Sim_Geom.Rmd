@@ -190,7 +190,7 @@ Y_noise_mta_full = Y_mta*epsilon
       
       
 
-fit150_getmtapriors <- stan(file='/Users/gregmurray/Documents/DS/Northbeam_MMM_sim_geom.stan',data=list(N=N, Y=Y_noise_mta_full, max_lag=max_lag, num_media=(2), num_media_inter=(2), num_media_full=(4), X_media=arr_mta_train), chains=4, iter=4000, warmup=1000,pars=c("noise_var","alpha","beta_medias_full", "x_bias_factors_adj", "k", "slope") )
+fit150_getmtapriors <- stan(file='MMM_sim_geom.stan',data=list(N=N, Y=Y_noise_mta_full, max_lag=max_lag, num_media=(2), num_media_inter=(2), num_media_full=(4), X_media=arr_mta_train), chains=4, iter=4000, warmup=1000,pars=c("noise_var","alpha","beta_medias_full", "x_bias_factors_adj", "k", "slope") )
 print(fit150_getmtapriors, pars=c( "noise_var","alpha", "beta_medias_full","x_bias_factors_adj", "k", "slope"))
 
 
@@ -305,11 +305,11 @@ Y_noise_full = Y_final*epsilon
 
 
 #using MTA priors
-fit150_final <- stan(file='/Users/gregmurray/Documents/DS/Northbeam_MMM_sim_final_geom.stan',data=list(N=N, Y=Y_noise_full, max_lag=max_lag, num_params=4, mta_mn_priors=mta_mn_priors, mta_sd_priors=mta_sd_priors,mta_betainter_mn_priors=mta_betainter_mn_priors, mta_betainter_sd_priors=mta_betainter_sd_priors, mta_kinter_mn_priors=mta_kinter_mn_priors, mta_kinter_sd_priors=mta_kinter_sd_priors,  num_media=(3),num_media_inter=(3),num_media_full=(6), X_media=arr_final_mmm_inp), chains=4, iter=3000, warmup=1000,pars=c("noise_var","nu", "alpha", "beta_medias", "beta_medias_inter", "k", "slope") )
+fit150_final <- stan(file='MMM_sim_final_geom.stan',data=list(N=N, Y=Y_noise_full, max_lag=max_lag, num_params=4, mta_mn_priors=mta_mn_priors, mta_sd_priors=mta_sd_priors,mta_betainter_mn_priors=mta_betainter_mn_priors, mta_betainter_sd_priors=mta_betainter_sd_priors, mta_kinter_mn_priors=mta_kinter_mn_priors, mta_kinter_sd_priors=mta_kinter_sd_priors,  num_media=(3),num_media_inter=(3),num_media_full=(6), X_media=arr_final_mmm_inp), chains=4, iter=3000, warmup=1000,pars=c("noise_var","nu", "alpha", "beta_medias", "beta_medias_inter", "k", "slope") )
 print(fit150_final, pars=c( "noise_var","nu", "alpha", "beta_medias","beta_medias_inter", "k", "slope"))
 
 
-fit150_nomta <- stan(file='/Users/gregmurray/Documents/DS/Northbeam_MMM_sim_nomta_geom.stan',data=list(N=N, Y=Y_noise_full, max_lag=max_lag, num_params=4,   num_media=(3),num_media_inter=(3),num_media_full=(6), X_media=arr_final_mmm_inp), chains=4, iter=3000, warmup=1000,pars=c("noise_var","nu", "alpha", "beta_medias", "beta_medias_inter", "k", "slope") )
+fit150_nomta <- stan(file='MMM_sim_nomta_geom.stan',data=list(N=N, Y=Y_noise_full, max_lag=max_lag, num_params=4,   num_media=(3),num_media_inter=(3),num_media_full=(6), X_media=arr_final_mmm_inp), chains=4, iter=3000, warmup=1000,pars=c("noise_var","nu", "alpha", "beta_medias", "beta_medias_inter", "k", "slope") )
 print(fit150_nomta, pars=c( "noise_var","nu", "alpha", "beta_medias","beta_medias_inter", "k", "slope"))
 
 
