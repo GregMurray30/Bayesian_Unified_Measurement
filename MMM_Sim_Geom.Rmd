@@ -497,9 +497,9 @@ print(c('BUMM model Aggregate MAPE:', MAPE_hyb_bumm_agg))
 print(c('No MTA model Aggregate MAPE:', MAPE_hyb_nomta_agg))
 
 
-ml_flow_basic2 = rbind(ml_flow_basic, c(MAPE_hyb_bumm_agg, MAPE_hyb_nomta_agg))
+ml_flow_basic = rbind(ml_flow_basic, c(MAPE_hyb_bumm_agg, MAPE_hyb_nomta_agg))
 
-write.csv(ml_flow_basic2, 'mlflow_basic2.csv')
+write.csv(ml_flow_basic, 'mlflow_basic.csv')
 
 
 ```
