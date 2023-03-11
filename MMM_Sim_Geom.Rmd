@@ -106,7 +106,7 @@ X4_5 = X4*X5
 
 
 
-x45_inp_frac = runif(2, .05, .3)
+x45_inp_frac = runif(2, .05, .25)
 noise_var_mta = .15#abs(rnorm(1, .1, .03))
 noise_var = abs(rnorm(1, .2, .05))
 #noise_var=.3
@@ -155,7 +155,7 @@ X_tensor2_mmm_inp <- dtensor(arr_mmm_inp)
 #beta=abs(rnorm(3, 1, .3))
 beta=runif(3, .5, 1.8)
 #beta_inter =rnorm(3, 0, .3)
-beta_inter =runif(3, -.35, .35)
+beta_inter =runif(3, -.3, .3)
 
 #set.seed(122)
 alpha = rbeta(3, 5, 10)
