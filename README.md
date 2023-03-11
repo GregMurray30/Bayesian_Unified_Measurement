@@ -2,7 +2,7 @@
 A Bayesian approach to unifying results from MTA and MMM models
 
 ## RUN INSTRUCTIONS:
-- After cloning the repo, open the file MMM_Sim_geom.rmd in RStudio. 
+- Open the file MMM_Sim_geom.rmd in RStudio. 
 - Exectute the first code block that contains required packages. 
 - Click "yes" when prompted to install the necessary packages.
 - Execute the second and then third code blocks in that order. 
