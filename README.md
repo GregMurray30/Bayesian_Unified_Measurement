@@ -2,10 +2,10 @@
 A Bayesian approach to unifying results from MTA and MMM models
 
 ## RUN INSTRUCTIONS:
-- Open the file MMM_Sim_geom.rmd in RStudio. 
-- Exectute the first code block that contains required packages. 
-- Click "yes" when prompted to install the necessary packages.
-- Execute the second and then third code blocks in that order. 
+- Open the file MMM_Sim_geom.rmd in RStudio
+- Execute the first code block that contains required packages
+- Click "yes" when prompted to install the necessary packages
+- Execute the second and then third code blocks in that order
 
 The code will print out the final MAPE for both the BUMM and the regular MMM model at the end.
 
