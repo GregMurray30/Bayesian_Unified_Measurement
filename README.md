@@ -6,6 +6,7 @@ A Bayesian approach to unifying results from MTA and MMM models
 - Execute the first code block that contains required packages
 - Click "yes" when prompted to install the necessary packages
 - Execute the second and then third code blocks in that order
+- To generate more than one simulation result, uncomment lines and 503
 
 The code will print out the final MAPE for both the BUMM and the regular MMM model at the end.
 
