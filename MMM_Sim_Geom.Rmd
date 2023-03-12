@@ -78,11 +78,10 @@ gen_mta_data <- function(num_media, N, max_lag, alpha, beta, k, s, X_tensor2_mta
 
 
 ```{r}
-#res_beta_z = array()
+
+ 
 #for (jj in 1:30) {
-# print('')
-# print(c('iter:', jj))
-# print('')
+ 
  
 N=300
 num_media_mmm_inp = 1
@@ -501,7 +500,7 @@ ml_flow_basic = rbind(ml_flow_basic, c(MAPE_hyb_bumm_agg, MAPE_hyb_nomta_agg))
 
 write.csv(ml_flow_basic, 'mlflow_basic.csv')
 
-
+#}
 ```
 
 
