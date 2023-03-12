@@ -15,3 +15,6 @@ This repo contains the code for demonstrating POC for a unified media measuremen
 The approach uses the revenue estimate(s) from the MTA to extract priors for the digital channel(s) to then feed into an MMM that contains spend time series for all channels of interest.
 It is assumed that the estimate(s) from the MTA will be biased upwards since it likely assigned revenue that should be attributed to traditional media to some or all of the digital channels in the MTA's touchpoint vector inputs (individuals may be exposed to non-digital impressions but those don't show up in digitally tracked touchpoint vectors so no credit is given to them). 
 
+## RESULTS
+
+As configured, a sample of 30 simulations yielded a statistically significant BUMM improvement in MAPE over a regular MMM with an expected improvement of 11.7 percentage points. Average BUMM MAPE: 25.9%, Average MMM MAPE: 27.6%.
