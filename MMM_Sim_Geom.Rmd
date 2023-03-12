@@ -501,6 +501,16 @@ ml_flow_basic = rbind(ml_flow_basic, c(MAPE_hyb_bumm_agg, MAPE_hyb_nomta_agg))
 write.csv(ml_flow_basic, 'mlflow_basic.csv')
 
 #}
+
+
+diffs = abs(ml_flow_basic[,6])-abs(ml_flow_basic[,5])
+
+se = sd(diffs)/sqrt(nrow(ml_flow_basic))
+mn = mean(diffs)
+
+print(c('Expected BUMM MAPE improvement over MMM', round(mn, 3)))
+
+print(c('95% CI range of BUMM improvement over MMM:', 'min:', round(mn-(1.97*se), 3), 'max:', round(mn+(1.97*se), 3)))
 ```
 
 
