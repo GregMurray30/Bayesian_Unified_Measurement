@@ -16,6 +16,8 @@ The data generating function is an adaptation of the 2017 Google paper https://s
 The approach uses the revenue estimate(s) from the MTA to extract priors for the digital channel(s) to then feed into an MMM that contains spend time series for all channels of interest.
 It is assumed that the estimate(s) from the MTA will be biased upwards since it likely assigned revenue that should be attributed to traditional media to some or all of the digital channels in the MTA's touchpoint vector inputs (individuals may be exposed to non-digital impressions but those don't show up in digitally tracked touchpoint vectors so no credit is given to them). 
 
+It was found that an averaging two different methods of generating predictions together yielded a more stable performance. First, the mean of the parameters were used as the fixed parameter estimates to generate a predicted revenue. Then, the weighted mean (weighted by the log likelihood of the draw) of the revenue estimates from 1000 parameter draws was used to produce a second revnue estimate. Finally, the two revenue estimates were averaged to produce the final prediction. The latter approach is traditionally the "correct" way to generate predictions since it accounts for the interdependence between the parameters which the former method marginalizes out by using overall means to generate one prediction.
+
 ## RESULTS
 
 As configured, a sample of 33 simulations yielded a statistically significant BUMM improvement in MAPE over a regular MMM with an expected improvement of 13.1 percentage points and Standard Error of 4.1 percentage points for the "digital" channel. 
