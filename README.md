@@ -18,7 +18,7 @@ It is assumed that the estimate(s) from the MTA will be biased upwards since it 
 
 ## RESULTS
 
-As configured, a sample of 30 simulations yielded a statistically significant BUMM improvement in MAPE over a regular MMM with an expected improvement of 13.1 percentage points and Standard Error of 4.1 percentage points. 
+As configured, a sample of 33 simulations yielded a statistically significant BUMM improvement in MAPE over a regular MMM with an expected improvement of 13.1 percentage points and Standard Error of 4.1 percentage points. 
 - Average BUMM MAPE: 31.6%
 - Average MMM MAPE: 44.7%
 - 95% CI range of expected improvement: 5.1 to 21.1 percentage points 
