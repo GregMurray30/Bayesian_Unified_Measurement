@@ -1,5 +1,5 @@
 # Bayesian_Unified_Measurement
-A Bayesian approach to unifying results from MTA and MMM models
+A Bayesian approach to unifying results from MTA and MMM models synergistically.
 
 ## RUN INSTRUCTIONS:
 - Open the file MMM_Sim_geom.rmd in RStudio
